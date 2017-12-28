@@ -306,7 +306,7 @@ static int __recover_dot_dentries(struct inode *dir, nid_t pino)
 
 	f2fs_lock_op(sbi);
 
-	de = f2fs_find_entry(dir, &dot, &page, NULL);
+	de = f2fs_find_entry(dir, &dot, &page);
 	if (de) {
 		f2fs_dentry_kunmap(dir, page);
 		f2fs_put_page(page, 0);
@@ -319,7 +319,7 @@ static int __recover_dot_dentries(struct inode *dir, nid_t pino)
 			goto out;
 	}
 
-	de = f2fs_find_entry(dir, &dotdot, &page, NULL);
+	de = f2fs_find_entry(dir, &dotdot, &page);
 	if (de) {
 		f2fs_dentry_kunmap(dir, page);
 		f2fs_put_page(page, 0);
@@ -345,8 +345,6 @@ static struct dentry *f2fs_lookup(struct inode *dir, struct dentry *dentry,
 	struct dentry *new;
 	nid_t ino = -1;
 	int err = 0;
-	struct ci_name_buf ci_name_buf;
-	struct qstr ci_name;
 	unsigned int root_ino = F2FS_ROOT_INO(F2FS_I_SB(dir));
 
 	trace_f2fs_lookup_start(dir, dentry, flags);
@@ -371,13 +369,7 @@ static struct dentry *f2fs_lookup(struct inode *dir, struct dentry *dentry,
 		goto out;
 	}
 
-	ci_name_buf.name[0] = '\0';
-
-	if (flags & LOOKUP_CASE_INSENSITIVE)
-		de = f2fs_find_entry(dir, &dentry->d_name, &page, &ci_name_buf);
-	else
-		de = f2fs_find_entry(dir, &dentry->d_name, &page, NULL);
-
+	de = f2fs_find_entry(dir, &dentry->d_name, &page);
 	if (!de) {
 		if (IS_ERR(page)) {
 			err = PTR_ERR(page);
@@ -445,7 +437,7 @@ static int f2fs_unlink(struct inode *dir, struct dentry *dentry)
 	dquot_initialize(dir);
 	dquot_initialize(inode);
 
-	de = f2fs_find_entry(dir, &dentry->d_name, &page, NULL);
+	de = f2fs_find_entry(dir, &dentry->d_name, &page);
 	if (!de) {
 		if (IS_ERR(page))
 			err = PTR_ERR(page);
@@ -852,7 +844,7 @@ static int f2fs_rename(struct inode *old_dir, struct dentry *old_dentry,
 
 		err = -ENOENT;
 		new_entry = f2fs_find_entry(new_dir, &new_dentry->d_name,
-						&new_page, NULL);
+						&new_page);
 		if (!new_entry) {
 			if (IS_ERR(new_page))
 				err = PTR_ERR(new_page);
@@ -906,7 +898,7 @@ static int f2fs_rename(struct inode *old_dir, struct dentry *old_dentry,
 			old_page = NULL;
 
 			old_entry = f2fs_find_entry(old_dir,
-						&old_dentry->d_name, &old_page, NULL);
+						&old_dentry->d_name, &old_page);
 			if (!old_entry) {
 				err = -ENOENT;
 				if (IS_ERR(old_page))
@@ -1017,14 +1009,14 @@ static int f2fs_cross_rename(struct inode *old_dir, struct dentry *old_dentry,
 
 	dquot_initialize(new_dir);
 
-	old_entry = f2fs_find_entry(old_dir, &old_dentry->d_name, &old_page, NULL);
+	old_entry = f2fs_find_entry(old_dir, &old_dentry->d_name, &old_page);
 	if (!old_entry) {
 		if (IS_ERR(old_page))
 			err = PTR_ERR(old_page);
 		goto out;
 	}
 
-	new_entry = f2fs_find_entry(new_dir, &new_dentry->d_name, &new_page, NULL);
+	new_entry = f2fs_find_entry(new_dir, &new_dentry->d_name, &new_page);
 	if (!new_entry) {
 		if (IS_ERR(new_page))
 			err = PTR_ERR(new_page);
