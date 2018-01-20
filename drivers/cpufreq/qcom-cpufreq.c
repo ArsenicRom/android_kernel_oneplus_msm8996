@@ -420,6 +420,21 @@ static struct cpufreq_frequency_table *cpufreq_parse_dt(struct device *dev,
 
 		ftbl[i].driver_data = i;
 		ftbl[i].frequency = f;
+
+#ifdef CONFIG_MACH_MSM8996_15801
+		/* Always underclock power cluster for stability */
+		if (cpu < 2) {
+			if (f == underclk_max_pwrcl) {
+				i++;
+				break;
+			}
+		} else if (!no_cpu_underclock) {
+			if (f == underclk_max_perfcl) {
+				i++;
+				break;
+			}
+		}
+#endif
 	}
 
 	ftbl[i].driver_data = i;
