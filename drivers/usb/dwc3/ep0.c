@@ -36,6 +36,7 @@
 #include "gadget.h"
 #include "io.h"
 #include "debug.h"
+#include "../../power/oem_external_fg.h"
 
 
 static bool enable_dwc3_u1u2;
@@ -598,22 +599,30 @@ static int dwc3_ep0_set_config(struct dwc3 *dwc, struct usb_ctrlrequest *ctrl)
 		break;
 
 	case USB_STATE_ADDRESS:
-		/* Read ep0IN related TXFIFO size */
-		dwc->last_fifo_depth = (dwc3_readl(dwc->regs,
-					DWC3_GTXFIFOSIZ(0)) & 0xFFFF);
-		/* Clear existing allocated TXFIFO for all IN eps except ep0 */
-		for (num = 0; num < dwc->num_in_eps; num++) {
-			dep = dwc->eps[(num << 1) | 1];
-			if (num) {
-				dwc3_writel(dwc->regs, DWC3_GTXFIFOSIZ(num), 0);
-				dep->fifo_depth = 0;
-			} else {
-				dep->fifo_depth = dwc->last_fifo_depth;
-			}
+		/*
+		 * If tx-fifo-resize flag is not set for the controller, then
+		 * do not clear existing allocated TXFIFO since we do not
+		 * allocate it again in dwc3_gadget_resize_tx_fifos
+		 */
+		if (dwc->needs_fifo_resize) {
+			/* Read ep0IN related TXFIFO size */
+			dwc->last_fifo_depth = (dwc3_readl(dwc->regs,
+						DWC3_GTXFIFOSIZ(0)) & 0xFFFF);
+			/* Clear existing TXFIFO for all IN eps except ep0 */
+			for (num = 0; num < dwc->num_in_eps; num++) {
+				dep = dwc->eps[(num << 1) | 1];
+				if (num) {
+					dwc3_writel(dwc->regs,
+						DWC3_GTXFIFOSIZ(num), 0);
+					dep->fifo_depth = 0;
+				} else {
+					dep->fifo_depth = dwc->last_fifo_depth;
+				}
 
-			dev_dbg(dwc->dev, "%s(): %s dep->fifo_depth:%x\n",
+				dev_dbg(dwc->dev, "%s(): %s fifo_depth:%x\n",
 					__func__, dep->name, dep->fifo_depth);
-			dbg_event(0xFF, "fifo_reset", dep->number);
+				dbg_event(0xFF, "fifo_reset", dep->number);
+			}
 		}
 
 		ret = dwc3_ep0_delegate_req(dwc, ctrl);
@@ -757,6 +766,19 @@ static int dwc3_ep0_set_isoch_delay(struct dwc3 *dwc, struct usb_ctrlrequest *ct
 
 	return 0;
 }
+static struct notify_usb_enumeration_status *usb_enumeration_status = NULL;
+
+void regsister_notify_usb_enumeration_status(struct notify_usb_enumeration_status *status)
+{
+	if (usb_enumeration_status) {
+		usb_enumeration_status = status;
+		pr_err("usb_enumeration_status %s multiple usb_enumeration_status called\n",
+				__func__);
+	} else {
+		usb_enumeration_status = status;
+	}
+}
+EXPORT_SYMBOL(regsister_notify_usb_enumeration_status);
 
 static int dwc3_ep0_std_request(struct dwc3 *dwc, struct usb_ctrlrequest *ctrl)
 {
@@ -776,6 +798,9 @@ static int dwc3_ep0_std_request(struct dwc3 *dwc, struct usb_ctrlrequest *ctrl)
 		ret = dwc3_ep0_handle_feature(dwc, ctrl, 1);
 		break;
 	case USB_REQ_SET_ADDRESS:
+		if(usb_enumeration_status&&usb_enumeration_status->notify_usb_enumeration) {
+			usb_enumeration_status->notify_usb_enumeration(true);
+		}
 		dwc3_trace(trace_dwc3_ep0, "USB_REQ_SET_ADDRESS\n");
 		ret = dwc3_ep0_set_address(dwc, ctrl);
 		break;
